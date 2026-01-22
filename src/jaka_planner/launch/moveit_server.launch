@@ -1,0 +1,9 @@
+<launch>
+	<!-- 声明允许传入的参数 -->
+    <arg name="ip" default="192.168.31.112" />
+    <arg name="model" default="s5" />
+	
+	<param name="ip" value="$(arg ip)" type="str"/>
+	<param name="model" value="$(arg model)" type="str"/>
+	<node pkg="jaka_planner" type="moveit_server" name="moveit_server" output="screen" />
+</launch>

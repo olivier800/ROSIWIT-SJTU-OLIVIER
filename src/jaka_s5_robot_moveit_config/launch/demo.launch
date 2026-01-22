@@ -1,0 +1,135 @@
+<launch>
+
+  <!-- specify the planning pipeline -->
+  <arg name="pipeline" default="ompl" />
+
+  <!-- By default, we do not start a database (it can be large) -->
+  <arg name="db" default="false" />
+  <!-- Allow user to specify database location -->
+  <arg name="db_path" default="$(find jaka_s5_robot_moveit_config)/default_warehouse_mongo_db" />
+
+  <!-- By default, we are not in debug mode -->
+  <arg name="debug" default="false" />
+
+  <!-- By default, we will load or override the robot_description -->
+  <arg name="load_robot_description" default="true"/>
+
+  <!-- Choose controller manager: fake, simple, or ros_control -->
+  <arg name="moveit_controller_manager" default="fake" />
+  <!-- Set execution mode for fake execution controllers -->
+  <arg name="fake_execution_type" default="interpolate" />
+
+  <!-- By default, hide joint_state_publisher's GUI in 'fake' controller_manager mode -->
+  <arg name="use_gui" default="false" />
+  <arg name="use_rviz" default="true" />
+
+  <!-- If needed, broadcast static tf for robot root -->
+  <node pkg="tf2_ros" type="static_transform_publisher" name="virtual_joint_broadcaster_0" args="0 0 0 0 0 0 virtual_frame world" />
+
+  <!-- If we are using the 'simple' controller manager, we need to publish tf by robot_state_publisher
+       and we need to publish joint states via our own joint_state_publisher -->
+  <group if="$(eval arg('moveit_controller_manager') =='simple')">
+    <!-- Given the published joint states, publish tf for the robot links -->
+    <node name="robot_state_publisher" pkg="robot_state_publisher" type="robot_state_publisher" respawn="true" output="screen" />
+
+    <!-- WWX: Add Moveit_server.launch-->
+    <!-- <include file="$(find jaka_planner)/launch/moveit_server.launch">
+      <arg name="ip" value = "192.168.31.112"/>
+      <arg name="model" value = "s5"/>
+    </include> -->
+
+    <!-- WWX: Start gripper server-->
+    <node pkg="jaka_s5_robot_moveit_config" type="fake_dh_gripper_trajectory_server.py" name="fake_dh_gripper_trajectory_server" output="screen" />
+
+    <!-- WWX: Publish hand-eye calibration result -->
+    <!-- Hand-eye calibration result from 2025-09-22 21:38:49 using Tsai-Lenz algorithm -->
+    <!-- Translation: [0.0513782, -0.0763816, 0.0254704] -->
+    <!-- Quaternion (w,x,y,z): [0.9196692054254034, -0.0034141792289337164, -0.009790204577580841, 0.3925570631981145] -->
+    <!-- Note: static_transform_publisher expects quaternion in (x,y,z,w) order -->
+    <node pkg="tf2_ros" type="static_transform_publisher" name="hand_eye_calibration_broadcaster"
+        args="0.0513782 -0.0763816 0.0254704 -0.0034141792289337164 -0.009790204577580841 0.3925570631981145 0.9196692054254034 Link_06 camera_color_optical_frame" />
+
+    <!-- WWX: Start realsense topics -->
+    <include file="$(find realsense2_camera)/launch/rs_camera.launch">
+      <!-- 启用点云并优化质量 -->
+      <arg name="enable_pointcloud" value="true"/>
+      <arg name="ordered_pc" value="true"/>
+      
+      <!-- 固定分辨率和帧率以提高稳定性 -->
+      <!-- <arg name="depth_width" value="640"/>
+      <arg name="depth_height" value="480"/>
+      <arg name="depth_fps" value="10"/>
+      <arg name="color_width" value="640"/>
+      <arg name="color_height" value="480"/>
+      <arg name="color_fps" value="10"/> -->
+      
+      <!-- 启用同步和对齐 -->
+      <arg name="enable_sync" value="false"/>
+      <arg name="align_depth" value="true"/>
+      
+      <!-- 启用自动曝光 (设为-1表示自动) -->
+      <!-- <arg name="stereo_module/exposure/1" value="-1"/>
+      <arg name="stereo_module/gain/1" value="-1"/>
+      <arg name="stereo_module/exposure/2" value="-1"/>
+      <arg name="stereo_module/gain/2" value="-1"/> -->
+      
+      <!-- 深度滤波器和裁剪 -->
+      <!-- <arg name="filters" value="decimation,spatial,temporal,hole_filling"/> -->
+      <arg name="filters" value="spatial,temporal,hole_filling"/> 
+      <!-- 去掉decimation的原因是会导致点云不均匀,因为decimation是简单的下采样 -->
+      <arg name="clip_distance" value="4.0"/>
+      
+      <!-- 置信度过滤 -->
+      <arg name="enable_confidence" value="true"/>
+    </include>
+
+    <!-- Run Rviz and load the default config to see the state of the move_group node -->
+    <include file="$(dirname)/moveit_rviz.launch" if="$(arg use_rviz)">
+      <arg name="rviz_config" value="$(dirname)/demo.rviz"/>
+      <arg name="debug" value="$(arg debug)"/>
+    </include>
+
+    <!-- WWX: Start masked pointcloud node -->
+    <!-- <node pkg="jaka_s5_robot_moveit_config" type="masked_pointcloud_node.py" name="masked_pointcloud_node" output="screen" cwd="node"/> -->
+  </group>
+
+  <group if="$(eval arg('moveit_controller_manager') == 'fake')">
+    <!-- We do not have a real robot connected, so publish fake joint states via a joint_state_publisher
+         MoveIt's fake controller's joint states are considered via the 'source_list' parameter -->
+    <node name="joint_state_publisher" pkg="joint_state_publisher" type="joint_state_publisher" unless="$(arg use_gui)">
+      <rosparam param="source_list">[move_group/fake_controller_joint_states]</rosparam>
+    </node>
+    <!-- If desired, a GUI version is available allowing to move the simulated robot around manually
+         This corresponds to moving around the real robot without the use of MoveIt. -->
+    <node name="joint_state_publisher" pkg="joint_state_publisher_gui" type="joint_state_publisher_gui" if="$(arg use_gui)">
+      <rosparam param="source_list">[move_group/fake_controller_joint_states]</rosparam>
+    </node>
+
+    <!-- Given the published joint states, publish tf for the robot links -->
+    <node name="robot_state_publisher" pkg="robot_state_publisher" type="robot_state_publisher" respawn="true" output="screen" />
+
+    <!-- Run Rviz and load the default config to see the state of the move_group node -->
+    <include file="$(dirname)/moveit_rviz.launch" if="$(arg use_rviz)">
+      <arg name="rviz_config" value="$(dirname)/fake.rviz"/>
+      <arg name="debug" value="$(arg debug)"/>
+    </include>
+  </group>
+
+  <!-- Run the main MoveIt executable without trajectory execution (we do not have controllers configured by default) -->
+  <include file="$(dirname)/move_group.launch">
+    <arg name="allow_trajectory_execution" value="true"/>
+    <arg name="moveit_controller_manager" value="$(arg moveit_controller_manager)" />
+    <arg name="fake_execution_type" value="$(arg fake_execution_type)"/>
+    <arg name="info" value="true"/>
+    <arg name="debug" value="$(arg debug)"/>
+    <arg name="pipeline" value="$(arg pipeline)"/>
+    <arg name="load_robot_description" value="$(arg load_robot_description)"/>
+  </include>
+
+  <!-- If database loading was enabled, start mongodb as well -->
+  <include file="$(dirname)/default_warehouse_db.launch" if="$(arg db)">
+    <arg name="moveit_warehouse_database_path" value="$(arg db_path)"/>
+  </include>
+
+
+</launch>

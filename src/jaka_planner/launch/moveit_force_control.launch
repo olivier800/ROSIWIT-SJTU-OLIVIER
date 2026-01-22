@@ -1,0 +1,136 @@
+<!-- 
+  通用力控清洁节点启动文件
+  
+  使用方法:
+  
+  1. 使用plane路径 + 默认home(sink):
+     roslaunch jaka_planner moveit_force_control.launch
+  
+  2. 使用remain路径 + sink home:
+     roslaunch jaka_planner moveit_force_control.launch path_type:=remain
+  
+  3. 使用toilet home预设:
+     roslaunch jaka_planner moveit_force_control.launch home_preset:=toilet
+  
+  4. 使用custom home预设(需要手动设置关节角):
+     roslaunch jaka_planner moveit_force_control.launch \
+       home_preset:=custom \
+       j1:=1.0 j2:=1.0 j3:=-1.0 j4:=1.0 j5:=1.5 j6:=0.0
+  
+  5. 完整配置:
+     roslaunch jaka_planner moveit_force_control.launch \
+       path_type:=remain \
+       home_preset:=toilet \
+       desired_force:=10.0
+-->
+<launch>
+    <!-- ==================== 路径类型配置 ==================== -->
+    <arg name="path_type" default="plane" 
+         doc="路径类型: plane 或 remain"/>
+    
+    <!-- ==================== 话题配置 ==================== -->
+    <!-- 根据path_type自动生成话题名 -->
+    <arg name="plane_normals_topic" value="/clean_path_$(arg path_type)_normals"/>
+    <arg name="center_point_topic" value="/clean_path_center_point"/>
+    
+    <!-- ==================== Home位置预设 ==================== -->
+    <!-- 
+      可选预设: sink, plane, toilet, custom
+      - sink:   水槽清洁位置 [-0.247, 1.596, -0.601, 0.571, 1.533, -1.148]
+      - plane:  平面清洁位置 [-2.619, 1.506, -0.573, 0.778, 1.615, -0.156]
+      - toilet: 马桶清洁位置 [1.233, 1.484, -1.051, 1.215, 1.577, -0.867]
+      - custom: 自定义位置(需手动设置j1-j6参数)
+    -->
+    <arg name="home_preset" default="sink" 
+         doc="Home位置预设: sink, plane, toilet, custom"/>
+    
+    <!-- Sink预设值 -->
+    <arg name="sink_j1" value="-2.047"/>
+    <arg name="sink_j2" value="1.596"/>
+    <arg name="sink_j3" value="-0.601"/>
+    <arg name="sink_j4" value="0.571"/>
+    <arg name="sink_j5" value="1.533"/>
+    <arg name="sink_j6" value="-1.148"/>
+    
+    <!-- Plane预设值 -->
+    <arg name="plane_j1" value="-2.619"/>
+    <arg name="plane_j2" value="1.506"/>
+    <arg name="plane_j3" value="-0.573"/>
+    <arg name="plane_j4" value="0.778"/>
+    <arg name="plane_j5" value="1.615"/>
+    <arg name="plane_j6" value="-0.156"/>
+    
+    <!-- Toilet预设值 -->
+    <arg name="toilet_j1" value="1.233"/>
+    <arg name="toilet_j2" value="1.484"/>
+    <arg name="toilet_j3" value="-1.051"/>
+    <arg name="toilet_j4" value="1.215"/>
+    <arg name="toilet_j5" value="1.577"/>
+    <arg name="toilet_j6" value="-0.867"/>
+    
+    <!-- Custom预设值(默认与sink相同,可通过参数覆盖) -->
+    <arg name="j1" default="-0.247" doc="关节1角度(弧度) - 仅当home_preset=custom时使用"/>
+    <arg name="j2" default="1.596" doc="关节2角度(弧度) - 仅当home_preset=custom时使用"/>
+    <arg name="j3" default="-0.601" doc="关节3角度(弧度) - 仅当home_preset=custom时使用"/>
+    <arg name="j4" default="0.571" doc="关节4角度(弧度) - 仅当home_preset=custom时使用"/>
+    <arg name="j5" default="1.533" doc="关节5角度(弧度) - 仅当home_preset=custom时使用"/>
+    <arg name="j6" default="-1.148" doc="关节6角度(弧度) - 仅当home_preset=custom时使用"/>
+    
+    <!-- 根据预设选择实际使用的home值 -->
+    <arg name="home_j1" value="$(eval sink_j1 if home_preset=='sink' else (plane_j1 if home_preset=='plane' else (toilet_j1 if home_preset=='toilet' else j1)))"/>
+    <arg name="home_j2" value="$(eval sink_j2 if home_preset=='sink' else (plane_j2 if home_preset=='plane' else (toilet_j2 if home_preset=='toilet' else j2)))"/>
+    <arg name="home_j3" value="$(eval sink_j3 if home_preset=='sink' else (plane_j3 if home_preset=='plane' else (toilet_j3 if home_preset=='toilet' else j3)))"/>
+    <arg name="home_j4" value="$(eval sink_j4 if home_preset=='sink' else (plane_j4 if home_preset=='plane' else (toilet_j4 if home_preset=='toilet' else j4)))"/>
+    <arg name="home_j5" value="$(eval sink_j5 if home_preset=='sink' else (plane_j5 if home_preset=='plane' else (toilet_j5 if home_preset=='toilet' else j5)))"/>
+    <arg name="home_j6" value="$(eval sink_j6 if home_preset=='sink' else (plane_j6 if home_preset=='plane' else (toilet_j6 if home_preset=='toilet' else j6)))"/>
+    
+    <!-- ==================== 力控参数 ==================== -->
+    <arg name="desired_force" default="8.0" doc="期望接触力(N)"/>
+    <arg name="kp" default="0.06" doc="位置比例增益"/>
+    <arg name="kd" default="0.12" doc="位置微分增益"/>
+    <arg name="mass" default="0.003" doc="虚拟质量(kg)"/>
+    <arg name="kpZ" default="0.06" doc="Z轴比例增益"/>
+    <arg name="kdZ" default="0.12" doc="Z轴微分增益"/>
+    
+    <!-- ==================== 运动参数 ==================== -->
+    <arg name="interpolation_dist" default="0.6" doc="路径插值步长(mm)"/>
+    <arg name="servo_stepnum" default="1.0" doc="伺服运动周期"/>
+    <arg name="joint_move_speed" default="500.0" doc="关节运动速度"/>
+    <arg name="linear_move_speed" default="1000.0" doc="直线运动速度"/>
+    
+    <!-- ==================== 机器人参数 ==================== -->
+    <arg name="robot_ip" default="192.168.31.112" doc="机器人IP地址"/>
+    <arg name="robot_model" default="s5" doc="机器人型号"/>
+    
+    <!-- ==================== 启动节点 ==================== -->
+    <node name="moveit_control_$(arg path_type)" pkg="jaka_planner" type="moveit_control" output="screen">
+        <!-- 力控参数 -->
+        <param name="desired_force" value="$(arg desired_force)"/>
+        <param name="kp" value="$(arg kp)"/>
+        <param name="kd" value="$(arg kd)"/>
+        <param name="mass" value="$(arg mass)"/>
+        <param name="kpZ" value="$(arg kpZ)"/>
+        <param name="kdZ" value="$(arg kdZ)"/>
+        
+        <!-- 运动参数 -->
+        <param name="interpolation_dist" value="$(arg interpolation_dist)"/>
+        <param name="servo_stepnum" value="$(arg servo_stepnum)"/>
+        <param name="joint_move_speed" value="$(arg joint_move_speed)"/>
+        <param name="linear_move_speed" value="$(arg linear_move_speed)"/>
+        
+        <!-- 机器人参数 -->
+        <param name="robot_ip" value="$(arg robot_ip)"/>
+        <param name="robot_model" value="$(arg robot_model)"/>
+        
+        <!-- 话题配置 -->
+        <param name="plane_normals_topic" value="$(arg plane_normals_topic)"/>
+        <param name="center_point_topic" value="$(arg center_point_topic)"/>
+        
+        <!-- Home关节角度 -->
+        <rosparam param="home_joint_values">[$(arg home_j1), $(arg home_j2), $(arg home_j3), $(arg home_j4), $(arg home_j5), $(arg home_j6)]</rosparam>
+    </node>
+    
+    <!-- 打印配置信息 -->
+    <node name="config_info" pkg="rostopic" type="rostopic" 
+          args="echo -n 1 /rosout" output="screen" launch-prefix="bash -c 'sleep 1; echo; echo ===== Force Control Configuration =====; echo Path Type: $(arg path_type); echo Home Preset: $(arg home_preset); echo Normals Topic: $(arg plane_normals_topic); echo Center Topic: $(arg center_point_topic); echo Home Joint: [$(arg home_j1), $(arg home_j2), $(arg home_j3), $(arg home_j4), $(arg home_j5), $(arg home_j6)]; echo Desired Force: $(arg desired_force) N; echo ======================================; echo; '"/>
+</launch>

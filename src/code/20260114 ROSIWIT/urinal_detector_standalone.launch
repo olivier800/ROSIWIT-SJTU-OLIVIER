@@ -1,0 +1,62 @@
+<?xml version="1.0"?>
+<launch>
+    <!-- Urinal Detector Node - Standalone Version -->
+    <node name="urinal_detector_node" pkg="code" type="urinal_detector.py" output="screen">
+        
+        <!-- Topic Names (matching clean_path_urinal_node.py) -->
+        <param name="input_cloud_topic" value="target_pointcloud"/>
+        <param name="processed_pointcloud_topic" value="processed_pointcloud"/>
+        <param name="uniform_topic" value="uniform_pointcloud"/>
+        <param name="plane_path_topic" value="clean_path_plane"/>
+        <param name="remain_path_topic" value="clean_path_remain"/>
+        <param name="center_point_topic" value="clean_path_center_point"/>
+        <param name="default_frame_id" value="base_link"/>
+        
+        <!-- Publishing Rate -->
+        <param name="pub_rate" value="2.0"/>
+        
+        <!-- ROI Parameters -->
+        <rosparam param="roi_min">[-1.0, -1.0, -1.0]</rosparam>
+        <rosparam param="roi_max">[1.0, 1.0, 1.0]</rosparam>
+        
+        <!-- Preprocessing Parameters -->
+        <param name="voxel_size" value="0.005"/>
+        <param name="ror_radius" value="0.012"/>
+        <param name="ror_min_pts" value="8"/>
+        <param name="trim_top" value="0.02"/>
+        <param name="trim_bottom" value="0.00"/>
+        
+        <!-- Tool Orientation Parameters -->
+        <rosparam param="predefined_rpy">[0.0, 0.0, 0.0]</rosparam>
+        <param name="tool_pointing_height" value="0.1"/>
+        <param name="tool_pointing_x_offset_ratio" value="0.12"/>
+        
+        <!-- Urinal Detection Parameters -->
+        <param name="urinal_detector/points_distance" value="0.1"/>
+        <param name="urinal_detector/distance_between_rotations" value="0.1"/>
+        <param name="urinal_detector/default_opening_angle" value="120.0"/>
+        <param name="urinal_detector/path_expand" value="0.0"/>
+        
+        <!-- Alpha Shape Parameters -->
+        <param name="urinal_detector/use_alpha_shape" value="true"/>
+        <param name="urinal_detector/alpha_value" value="0.20"/>
+        <param name="urinal_detector/enable_plane_detect" value="false"/>
+        <param name="urinal_detector/plane_raster_spacing" value="0.02"/>
+        
+        <!-- Layering Parameters -->
+        <param name="urinal_detector/slice_mode" value="by_bins"/>
+        <param name="urinal_detector/slice_bins" value="10"/>
+        <param name="urinal_detector/layer_distance" value="0.05"/>
+        <param name="urinal_detector/boundary_expansion" value="0.0"/>
+        
+        <!-- Path Filtering Parameters (for open shapes) -->
+        <param name="urinal_detector/enable_path_filter" value="true"/>
+        <param name="urinal_detector/path_filter_max_dist" value="0.03"/>
+        <param name="urinal_detector/path_filter_min_segment" value="5"/>
+        
+        <!-- Visualization Parameters -->
+        <param name="path_line_width" value="0.003"/>
+        <param name="normal_arrow_len" value="0.05"/>
+        
+    </node>
+</launch>
